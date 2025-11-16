@@ -1,4 +1,5 @@
 ﻿using eShop.AppHost;
+using Temporal.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -16,6 +17,8 @@ var catalogDb = postgres.AddDatabase("catalogdb");
 var identityDb = postgres.AddDatabase("identitydb");
 var orderDb = postgres.AddDatabase("orderingdb");
 var webhooksDb = postgres.AddDatabase("webhooksdb");
+
+builder.AddTemporal("temporal-server");
 
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
