@@ -1,11 +1,15 @@
-﻿public class OrderServices(
+﻿using Temporalio.Client;
+
+public class OrderServices(
     IMediator mediator,
     IOrderQueries queries,
     IIdentityService identityService,
-    ILogger<OrderServices> logger)
+    ILogger<OrderServices> logger,
+    ITemporalClient temporalClient)
 {
     public IMediator Mediator { get; set; } = mediator;
     public ILogger<OrderServices> Logger { get; } = logger;
     public IOrderQueries Queries { get; } = queries;
     public IIdentityService IdentityService { get; } = identityService;
+    public ITemporalClient TemporalClient { get; } = temporalClient;
 }

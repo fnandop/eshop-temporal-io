@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Temporalio.Client;
 using CardType = eShop.Ordering.API.Application.Queries.CardType;
 using Order = eShop.Ordering.API.Application.Queries.Order;
 
@@ -14,7 +15,8 @@ public static class OrdersApi
         api.MapGet("/", GetOrdersByUserAsync);
         api.MapGet("/cardtypes", GetCardTypesAsync);
         api.MapPost("/draft", CreateOrderDraftAsync);
-        api.MapPost("/", CreateOrderAsync);
+        api.MapPost("/create", CreateOrderAsync);
+        api.MapPost("/", SubmitOrder);
 
         return api;
     }
@@ -120,9 +122,9 @@ public static class OrdersApi
         CreateOrderRequest request,
         [AsParameters] OrderServices services)
     {
-        
+
         //mask the credit card number
-        
+
         services.Logger.LogInformation(
             "Sending command: {CommandName} - {IdProperty}: {CommandId}",
             request.GetGenericTypeName(),
@@ -165,6 +167,17 @@ public static class OrdersApi
 
             return TypedResults.Ok();
         }
+    }
+
+
+    public static async Task<Results<Ok, BadRequest<string>>> SubmitOrder(
+      [FromHeader(Name = "x-requestid")] Guid requestId,
+      CreateOrderRequest request,
+      [AsParameters] OrderServices services)
+    {
+        var workflowId = requestId.ToString();
+        await services.TemporalClient.StartWorkflowAsync("EShopWorkflow", [request], new WorkflowOptions(workflowId, "eshop-task-queue"));
+        return TypedResults.Ok();
     }
 }
 

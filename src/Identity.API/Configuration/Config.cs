@@ -185,7 +185,33 @@
                     {
                         "webhooks"
                     }
-                }
+                },
+                   new Client
+                {
+                    ClientId = "temporal-workflow-worker",
+                    ClientName = "Temporal Workflow Worker",
+                    AllowedGrantTypes = GrantTypes.ClientCredentials,                    
+                    //Used to retrieve the access token on the back channel.
+                    ClientSecrets = { new Secret("batata".Sha256()) },
+                   
+                    //RequireConsent = false,
+                    //RequirePkce = true,
+                    ////AllowedCorsOrigins = { "http://eshopxamarin" },
+                    AllowedScopes = new List<string>
+                    {
+                        IdentityServerConstants.StandardScopes.OfflineAccess,
+                        "orders",
+                        "basket",
+                        "mobileshoppingagg",
+                        "webhooks"
+                    },
+                    ////Allow requesting refresh tokens for long lived API access
+                    //AllowOfflineAccess = true,
+                    //AllowAccessTokensViaBrowser = true,
+                    //AlwaysIncludeUserClaimsInIdToken = true,
+                    AccessTokenLifetime = 60*60*2, // 2 hours
+                    //IdentityTokenLifetime= 60*60*2 // 2 hours
+                },
             };
         }
     }

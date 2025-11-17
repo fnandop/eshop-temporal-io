@@ -1,4 +1,5 @@
-﻿using eShop.AppHost;
+﻿using Aspire.Hosting;
+using eShop.AppHost;
 using Temporal.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -11,14 +12,17 @@ var rabbitMq = builder.AddRabbitMQ("eventbus")
 var postgres = builder.AddPostgres("postgres")
     .WithImage("ankane/pgvector")
     .WithImageTag("latest")
-    .WithLifetime(ContainerLifetime.Persistent);
+    .WithLifetime(ContainerLifetime.Persistent)
+    .WithHostPort(5432)
+    .WithPgAdmin();
 
 var catalogDb = postgres.AddDatabase("catalogdb");
 var identityDb = postgres.AddDatabase("identitydb");
 var orderDb = postgres.AddDatabase("orderingdb");
 var webhooksDb = postgres.AddDatabase("webhooksdb");
 
-builder.AddTemporal("temporal-server");
+var temporalServer = builder.AddTemporal("temporal-server", 7233, 8233);
+
 
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
@@ -52,6 +56,11 @@ builder.AddProject<Projects.OrderProcessor>("order-processor")
 
 builder.AddProject<Projects.PaymentProcessor>("payment-processor")
     .WithReference(rabbitMq).WaitFor(rabbitMq);
+
+builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
+    .WithReference(temporalServer).WaitFor(temporalServer)
+    .WithReference(orderingApi).WaitFor(orderingApi)
+    .WithEnvironment("Identity__Url", identityEndpoint); 
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)

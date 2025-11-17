@@ -3,6 +3,7 @@
 builder.AddServiceDefaults();
 builder.AddApplicationServices();
 builder.Services.AddProblemDetails();
+builder.Services.AddTemporalClient(clientTargetHost: "localhost:7233");
 
 var withApiVersioning = builder.Services.AddApiVersioning();
 
@@ -15,7 +16,8 @@ app.MapDefaultEndpoints();
 var orders = app.NewVersionedApi("Orders");
 
 orders.MapOrdersApiV1()
-      .RequireAuthorization();
+      .RequireAuthorization()
+      ;
 
 app.UseDefaultOpenApi();
 app.Run();

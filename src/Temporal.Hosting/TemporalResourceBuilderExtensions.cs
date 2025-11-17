@@ -12,7 +12,9 @@ namespace Temporal.Hosting
 
         public static IResourceBuilder<TemporalResource> AddTemporal(
        this IDistributedApplicationBuilder builder,
-       string name)
+       string name,
+        int? grpcPort = null,
+        int? uiPort = null)
         {
 
 
@@ -38,10 +40,14 @@ namespace Temporal.Hosting
 
 
                           // Expose port 7233 (Temporal gRPC server)
-                          .WithEndpoint(targetPort: 7233, name: "grpc")
+                          .WithEndpoint(targetPort: 7233,
+                                        port: grpcPort,
+                                        name: TemporalResource.TemporalServerGRPCEndpointName)
 
                              // Expose port 8233 (Temporal Web UI)
-                             .WithHttpEndpoint(targetPort: 8233, name: "ui");
+                             .WithHttpEndpoint(targetPort: 8233,
+                                        port: uiPort,
+                                            name: TemporalResource.TemporalServerUIEndpointName);
 
         }
 
