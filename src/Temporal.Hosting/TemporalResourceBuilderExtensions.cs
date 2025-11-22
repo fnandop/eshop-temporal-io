@@ -9,10 +9,16 @@ namespace Temporal.Hosting
     public static class TemporalResourceBuilderExtensions
     {
 
+
         public static IResourceBuilder<TemporalResource> AddTemporal(
        this IDistributedApplicationBuilder builder,
        string name)
         {
+
+
+            var temporalDbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Temporal", "StartDev","DB");
+            Directory.CreateDirectory(temporalDbPath);
+
             // The AddResource method is a core API within Aspire and is
             // used by resource developers to wrap a custom resource in an
             // IResourceBuilder<T> instance. Extension methods to customize
@@ -23,7 +29,13 @@ namespace Temporal.Hosting
                           .WithImage(TemporalContainerImageTags.Image)
                           .WithImageRegistry(TemporalContainerImageTags.Registry)
                           .WithImageTag(TemporalContainerImageTags.Tag)
-                           .WithArgs("server", "start-dev", "--ip", "0.0.0.0")
+                           //.WithVolume(target: "/var/opt/temporal")
+                             .WithBindMount(source: temporalDbPath, target: "/var/opt/temporal")
+                           .WithArgs("server", "start-dev",
+                                     "--ip", "0.0.0.0" ,
+                                     "--db-filename", "/var/opt/temporal/temporal.db"
+                           )
+
 
                           // Expose port 7233 (Temporal gRPC server)
                           .WithEndpoint(targetPort: 7233, name: "grpc")
