@@ -32,7 +32,7 @@ public class NewOrderRequestHandlerTest
             .Returns(Task.FromResult(FakeOrder()));
 
         _orderRepositoryMock.UnitOfWork.SaveChangesAsync(default)
-            .Returns(Task.FromResult(1));
+            .Returns(Task.FromResult((int)default));
 
         _identityServiceMock.GetUserIdentity().Returns(buyerId);
 
@@ -43,7 +43,7 @@ public class NewOrderRequestHandlerTest
         var result = await handler.Handle(fakeOrderCmd, cltToken);
 
         //Assert
-        Assert.IsFalse(result);
+        Assert.AreEqual(result, (int)default);
     }
 
     [TestMethod]
@@ -60,12 +60,13 @@ public class NewOrderRequestHandlerTest
 
     private Order FakeOrder()
     {
-        return new Order("1", "fakeName", new Address("street", "city", "state", "country", "zipcode"), 1, "12", "111", "fakeName", DateTime.UtcNow.AddYears(1));
+        return new Order("b66b20c7-5d40-40c5-b701-982e092bc22f", "1", "fakeName", new Address("street", "city", "state", "country", "zipcode"), 1, "12", "111", "fakeName", DateTime.UtcNow.AddYears(1));
     }
 
     private CreateOrderCommand FakeOrderRequestWithBuyer(Dictionary<string, object> args = null)
     {
         return new CreateOrderCommand(
+            orderyGuid: args != null && args.ContainsKey("orderyGuid") ? (string)args["orderyGuid"] : null,
             new List<BasketItem>(),
             userId: args != null && args.ContainsKey("userId") ? (string)args["userId"] : null,
             userName: args != null && args.ContainsKey("userName") ? (string)args["userName"] : null,

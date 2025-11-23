@@ -1,4 +1,6 @@
-﻿namespace eShop.Ordering.Infrastructure.Repositories;
+﻿using eShop.Ordering.Domain.AggregatesModel.OrderAggregate;
+
+namespace eShop.Ordering.Infrastructure.Repositories;
 
 public class OrderRepository
     : IOrderRepository
@@ -34,5 +36,18 @@ public class OrderRepository
     public void Update(Order order)
     {
         _context.Entry(order).State = EntityState.Modified;
+    }
+
+    public async Task<Order> GetAsyncByOrderGuid(string orderyGuid)
+    {
+        var order = await _context.Orders.FirstOrDefaultAsync(o => o.OrderyGuid == orderyGuid);;
+
+        if (order != null)
+        {
+            await _context.Entry(order)
+                .Collection(i => i.OrderItems).LoadAsync();
+        }
+
+        return order;
     }
 }

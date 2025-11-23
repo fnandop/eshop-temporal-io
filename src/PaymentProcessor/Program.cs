@@ -1,15 +1,28 @@
-﻿var builder = WebApplication.CreateBuilder(args);
+﻿using PaymentProcessor;
+
+
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddApplicationServices();
+builder.Services.AddTemporalClient(clientTargetHost: "localhost:7233");
+builder.Services.AddProblemDetails();
 
-builder.AddRabbitMqEventBus("EventBus")
-    .AddSubscription<OrderStatusChangedToStockConfirmedIntegrationEvent, OrderStatusChangedToStockConfirmedIntegrationEventHandler>();
+var withApiVersioning = builder.Services.AddApiVersioning();
 
-builder.Services.AddOptions<PaymentOptions>()
-    .BindConfiguration(nameof(PaymentOptions));
+builder.AddDefaultOpenApi(withApiVersioning);
 
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
-await app.RunAsync();
+app.UseStatusCodePages();
+
+app.MapPaymentProcessorEndpoints();
+
+app.UseDefaultOpenApi();
+app.Run();
+
+
+

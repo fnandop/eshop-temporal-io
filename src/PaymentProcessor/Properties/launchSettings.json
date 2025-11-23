@@ -2,8 +2,8 @@
   "profiles": {
     "PaymentProcessor": {
       "commandName": "Project",
-      "launchBrowser": false,
-      "applicationUrl": "http://localhost:5226",
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5238",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }

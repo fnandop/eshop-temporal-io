@@ -1,17 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using Duende.AccessTokenManagement;
+﻿using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Refit;
 using Temporalio.Activities;
 using Temporalio.Common;
-using Temporalio.Exceptions;
 using Temporalio.Workflows;
+using static Temporal.Workflow.ICatalogService;
 
 
 namespace Temporal.Workflow
@@ -20,6 +12,9 @@ namespace Temporal.Workflow
     public class EShopWorkflow
     {
 
+        int _orderId = default;
+        private PaymentStatus _paymentStatus = PaymentStatus.Unknown;
+        
 
         [WorkflowRun]
         public async Task RunAsync(OrderRequest orderRequest)
@@ -35,123 +30,158 @@ namespace Temporal.Workflow
                 NonRetryableErrorTypes = new[] { "InvalidAccountException", "InsufficientFundsException" }
             };
 
+            _orderId = await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+                (EShopActivities act) => act.CreateOrder(orderRequest),
+                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+
+            //Grace period
+            await Temporalio.Workflows.Workflow.DelayAsync(TimeSpan.FromSeconds(5));
+
             await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
-               (EShopActivities act) => act.CreateOrder(orderRequest),
+                (EShopActivities act) => act.SetAwaitingValidation(_orderId),
+                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+            var checkStockResult = await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+                (EShopActivities act) => act.CheckStock(_orderId, orderRequest.Items),
+                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+            if (checkStockResult.StockConfirmed)
+                await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+               (EShopActivities act) => act.ConfirmThatHasStock(_orderId),
                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+            else
+                await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+             (EShopActivities act) => act.ConfirmThatHasNoStock(_orderId, checkStockResult.OrderStockItems.Select(i => new IOrderService.ConfirmedOrderStockItem(i.ProductId, i.HasStock))),
+             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+
+            await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+             (EShopActivities act) => act.ConfirmPaymentAsync(_orderId, orderRequest.OrderyGuid),
+             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+            // Wait for purchase
+            await Temporalio.Workflows.Workflow.WaitConditionAsync(() => _paymentStatus != PaymentStatus.Unknown);
+
+            if (_paymentStatus == PaymentStatus.Succeeded)
+            {
+                // Payment succeeded logic
+                await Temporalio.Workflows.Workflow.ExecuteActivityAsync((EShopActivities act) => act.SetPaidOrderStatus(_orderId),
+                       new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+                //TODO update stock in catalog service
+
+            }
+            else if (_paymentStatus == PaymentStatus.Failed)
+            {
+                await Temporalio.Workflows.Workflow.ExecuteActivityAsync((EShopActivities act) => act.CancelOrder(_orderId),
+                       new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+
+            }
+
+
         }
+
+        enum PaymentStatus
+        {
+            Unknown,
+            Succeeded,
+            Failed
+        }
+
+        [WorkflowSignal("NotifyOrderPaymentSucceeded")]
+        public async Task NotifyOrderPaymentSucceededAsync() => _paymentStatus = PaymentStatus.Succeeded;
+
+        [WorkflowSignal("NotifyOrderPaymentFailed")]
+        public async Task NotifyOrderPaymentFailedAsync() => _paymentStatus = PaymentStatus.Failed;
+
+
 
     }
 
-    public class EShopActivities(IOrderService orderService)
+
+
+    public class EShopActivities
     {
-        
+        private readonly IPaymentsService _paymentsService;
+
+        public IOrderService _orderService { get; }
+        public ICatalogService _catalogService { get; }
+
+        public EShopActivities(IOrderService orderService, ICatalogService catalogService, IPaymentsService paymentsService)
+        {
+            _orderService = orderService;
+            _catalogService = catalogService;
+            _paymentsService = paymentsService;
+        }
+
         [Activity]
-        public async Task CreateOrder(OrderRequest orderRequest)
+        public async Task<int> CreateOrder(OrderRequest orderRequest)
         {
             var requestId = Guid.NewGuid().ToString();
-            await orderService.CreateOrderAsync(orderRequest, requestId);
+            int orderId = await _orderService.CreateOrderAsync(orderRequest, requestId);
             ActivityExecutionContext.Current.Logger.LogInformation("CreateOrder {requestId}", requestId);
+            return orderId;
         }
 
-        //[Activity]
-        //public static void WithdrawCompensation(TransferDetails d)
-        //{
-        //    ActivityExecutionContext.Current.Logger.LogInformation("Withdrawing Compensation {Amount} from account {FromAmount}. ReferenceId: {ReferenceId}", d.Amount, d.FromAmount, d.ReferenceId);
-        //}
+        public record SetAwaitingValidationRequest(int OrderId);
 
-        //[Activity]
-        //public static void Deposit(TransferDetails d)
-        //{
-        //    ActivityExecutionContext.Current.Logger.LogInformation("Depositing {Amount} into account {ToAmount}. ReferenceId: {ReferenceId}", d.Amount, d.ToAmount, d.ReferenceId);
-        //}
-
-        //[Activity]
-        //public static void DepositCompensation(TransferDetails d)
-        //{
-        //    ActivityExecutionContext.Current.Logger.LogInformation("Depositing Compensation {Amount} int account {ToAmount}. ReferenceId: {ReferenceId}", d.Amount, d.ToAmount, d.ReferenceId);
-        //}
-
-        //[Activity]
-        //public static void StepWithError(TransferDetails d)
-        //{
-        //    ActivityExecutionContext.Current.Logger.LogInformation("Simulate failure to trigger compensation. ReferenceId: {ReferenceId}", d.ReferenceId);
-        //    throw new ApplicationFailureException("Simulated failure", nonRetryable: true);
-        //}
-    }
-
-    public record OrderRequest(
-    string UserId,
-    string UserName,
-    string City,
-    string Street,
-    string State,
-    string Country,
-    string ZipCode,
-    string CardNumber,
-    string CardHolderName,
-    DateTime CardExpiration,
-    string CardSecurityNumber,
-    int CardTypeId,
-    string Buyer,
-    List<BasketItem> Items);
-
-    public class BasketItem
-    {
-        public required string Id { get; init; }
-        public int ProductId { get; init; }
-        public required string ProductName { get; init; }
-        public decimal UnitPrice { get; init; }
-        public decimal OldUnitPrice { get; init; }
-        public int Quantity { get; init; }
-        public string? PictureUrl { get; init; }
-    }
-
-    public interface IOrderService
-    {
+        [Activity]
+        public async Task SetAwaitingValidation(int orderId)
+        {
+            await _orderService.SetAwaitingValidation(orderId);
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm if has Stock {OrderId}", orderId);
+        }
 
 
-        [Post("/api/orders/create?api-version=1.0")]
-        Task CreateOrderAsync(OrderRequest orderRequest, [Header("x-requestid")] string requestId);
+        [Activity]
+        public async Task<CheckStockResult> CheckStock(int orderId, IEnumerable<BasketItem> basketItems)
+        {
+            var result = await _catalogService.CheckStock(new CheckStockRequest(orderId, basketItems.Select(i => new OrderStockItem(i.ProductId, i.Quantity))));
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm if has Stock {OrderId}", orderId);
+            return result;
+        }
 
-        //Task<IEnumerable<Models.Orders.Order>> GetOrdersAsync();
 
-        //Task<Models.Orders.Order> GetOrderAsync(int orderId);
+        [Activity]
+        public async Task ConfirmThatHasStock(int orderId)
+        {
+            await _orderService.ConfirmStockAsync(orderId);
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has Stock {OrderId}", orderId);
+        }
 
-        //Task<bool> CancelOrderAsync(int orderId);
+        [Activity]
+        public async Task ConfirmThatHasNoStock(int orderId, IEnumerable<IOrderService.ConfirmedOrderStockItem> orderStockItems)
+        {
+            await _orderService.ConfirmStockRejectedAsync(orderId, orderStockItems);
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
+        }
+        [Activity]
+        public async Task SetPaidOrderStatus(int orderId)
+        {
+            await _orderService.SetPaidOrderStatusAsync(orderId);
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
+        }
 
-        //OrderCheckout MapOrderToBasket(Models.Orders.Order order);
+        [Activity]
+        public async Task CancelOrder(int orderId)
+        {
+            await _orderService.CancelOrderAsync(orderId);
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
+        }
+
+        [Activity]
+        public async Task ConfirmPaymentAsync(int orderId, string orderyGuid)
+        {
+            await _paymentsService.ConfirmPaymentAsync(new PaymentRequest { OrderId = orderId, OrderyGuid = orderyGuid });
+            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
+        }
+
+
+
     }
 
 
-    //public class OrderService(HttpClient httpClient) : IOrderService
-    //{
 
 
-
-
-    //    public async Task CreateOrderAsync(OrderRequest orderRequest)
-    //    {
-    //        // create a new GUID per request (or pass one in if you already have it)
-    //        var requestId = Guid.NewGuid().ToString();
-
-    //        using var request = new HttpRequestMessage(
-    //            HttpMethod.Post,
-    //            "/api/orders/create?api-version=1.0"   // keep your api-version if required
-    //        );
-
-    //        request.Headers.Add("x-requestid", requestId); // header name matches parameter (case-insensitive)
-    //        request.Content = JsonContent.Create(orderRequest);
-
-    //        var response = await httpClient.SendAsync(request);
-    //        response.EnsureSuccessStatusCode();
-    //    }
-
-    //    //Task<IEnumerable<Models.Orders.Order>> GetOrdersAsync();
-
-    //    //Task<Models.Orders.Order> GetOrderAsync(int orderId);
-
-    //    //Task<bool> CancelOrderAsync(int orderId);
-
-    //    //OrderCheckout MapOrderToBasket(Models.Orders.Order order);
-    //}
 }

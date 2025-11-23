@@ -19,7 +19,7 @@ public class SetPaidOrderStatusCommandHandler : IRequestHandler<SetPaidOrderStat
     public async Task<bool> Handle(SetPaidOrderStatusCommand command, CancellationToken cancellationToken)
     {
         // Simulate a work time for validating the payment
-        await Task.Delay(10000, cancellationToken);
+        await Task.Delay(5000, cancellationToken);
 
         var orderToUpdate = await _orderRepository.GetAsync(command.OrderNumber);
         if (orderToUpdate == null)
@@ -44,8 +44,9 @@ public class SetPaidIdentifiedOrderStatusCommandHandler : IdentifiedCommandHandl
     {
     }
 
-    protected override bool CreateResultForDuplicateRequest()
+    protected override Task<bool> CreateResultForDuplicateRequest(SetPaidOrderStatusCommand _ )
     {
-        return true; // Ignore duplicate requests for processing order.
+        return Task.FromResult(true); // Ignore duplicate requests for processing order.
     }
+
 }

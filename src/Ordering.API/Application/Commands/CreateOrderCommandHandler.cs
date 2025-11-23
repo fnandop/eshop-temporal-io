@@ -1,10 +1,11 @@
 ﻿namespace eShop.Ordering.API.Application.Commands;
 
+using System.Threading.Tasks;
 using eShop.Ordering.Domain.AggregatesModel.OrderAggregate;
 
 // Regular CommandHandler
 public class CreateOrderCommandHandler
-    : IRequestHandler<CreateOrderCommand, bool>
+    : IRequestHandler<CreateOrderCommand, int>
 {
     private readonly IOrderRepository _orderRepository;
     private readonly IIdentityService _identityService;
@@ -26,7 +27,7 @@ public class CreateOrderCommandHandler
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<bool> Handle(CreateOrderCommand message, CancellationToken cancellationToken)
+    public async Task<int> Handle(CreateOrderCommand message, CancellationToken cancellationToken)
     {
         // Add Integration event to clean the basket
         var orderStartedIntegrationEvent = new OrderStartedIntegrationEvent(message.UserId);
@@ -37,7 +38,7 @@ public class CreateOrderCommandHandler
         // methods and constructor so validations, invariants and business logic 
         // make sure that consistency is preserved across the whole aggregate
         var address = new Address(message.Street, message.City, message.State, message.Country, message.ZipCode);
-        var order = new Order(message.UserId, message.UserName, address, message.CardTypeId, message.CardNumber, message.CardSecurityNumber, message.CardHolderName, message.CardExpiration);
+        var order = new Order(message.OrderyGuid, message.UserId, message.UserName, address, message.CardTypeId, message.CardNumber, message.CardSecurityNumber, message.CardHolderName, message.CardExpiration);
 
         foreach (var item in message.OrderItems)
         {
@@ -48,24 +49,31 @@ public class CreateOrderCommandHandler
 
         _orderRepository.Add(order);
 
-        return await _orderRepository.UnitOfWork.SaveEntitiesAsync(cancellationToken);
+        await _orderRepository.UnitOfWork.SaveEntitiesAsync(cancellationToken);
+        return order.Id;
     }
 }
 
 
 // Use for Idempotency in Command process
-public class CreateOrderIdentifiedCommandHandler : IdentifiedCommandHandler<CreateOrderCommand, bool>
+public class CreateOrderIdentifiedCommandHandler : IdentifiedCommandHandler<CreateOrderCommand, int>
 {
+    private readonly IOrderRepository _orderRepository;
     public CreateOrderIdentifiedCommandHandler(
         IMediator mediator,
         IRequestManager requestManager,
-        ILogger<IdentifiedCommandHandler<CreateOrderCommand, bool>> logger)
+        ILogger<IdentifiedCommandHandler<CreateOrderCommand, int>> logger,
+        IOrderRepository orderRepository)
         : base(mediator, requestManager, logger)
     {
+        _orderRepository = orderRepository;
     }
 
-    protected override bool CreateResultForDuplicateRequest()
+    protected override async Task<int> CreateResultForDuplicateRequest(CreateOrderCommand createOrderCommand)
     {
-        return true; // Ignore duplicate requests for creating order.
+
+      var alreadyCreatedOrder = await  _orderRepository.GetAsyncByOrderGuid(createOrderCommand.OrderyGuid);
+
+        return alreadyCreatedOrder.Id; // Ignore duplicate requests for creating order.
     }
 }

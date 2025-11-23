@@ -11,6 +11,11 @@ class OrderEntityTypeConfiguration : IEntityTypeConfiguration<Order>
         orderConfiguration.Property(o => o.Id)
             .UseHiLo("orderseq");
 
+        orderConfiguration.HasIndex(o=>o.OrderyGuid)
+            .IsUnique();
+
+        orderConfiguration.Property(o => o.OrderyGuid);
+
         //Address value object persisted as owned entity type supported since EF Core 2.0
         orderConfiguration
             .OwnsOne(o => o.Address);

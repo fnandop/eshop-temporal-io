@@ -41,8 +41,8 @@ public class ShipOrderIdentifiedCommandHandler : IdentifiedCommandHandler<ShipOr
     {
     }
 
-    protected override bool CreateResultForDuplicateRequest()
+    protected override Task<bool> CreateResultForDuplicateRequest(ShipOrderCommand _)
     {
-        return true; // Ignore duplicate requests for processing order.
+        return Task.FromResult(true); // Ignore duplicate requests for processing order.
     }
 }

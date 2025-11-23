@@ -41,8 +41,9 @@ public class SetAwaitingValidationIdentifiedOrderStatusCommandHandler : Identifi
     {
     }
 
-    protected override bool CreateResultForDuplicateRequest()
+    
+    protected override Task<bool> CreateResultForDuplicateRequest(SetAwaitingValidationOrderStatusCommand _)
     {
-        return true; // Ignore duplicate requests for processing order.
+        return Task.FromResult(true); // Ignore duplicate requests for processing order.
     }
 }

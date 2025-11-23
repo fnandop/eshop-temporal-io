@@ -1,4 +1,5 @@
-﻿using Aspire.Hosting;
+﻿using System.Diagnostics;
+using Aspire.Hosting;
 using eShop.AppHost;
 using Temporal.Hosting;
 
@@ -21,7 +22,7 @@ var identityDb = postgres.AddDatabase("identitydb");
 var orderDb = postgres.AddDatabase("orderingdb");
 var webhooksDb = postgres.AddDatabase("webhooksdb");
 
-var temporalServer = builder.AddTemporal("temporal-server", 7233, 8233);
+var temporalServer = builder.AddTemporal("temporal-server", 7233, 8233).WithLifetime(ContainerLifetime.Persistent);
 
 
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
@@ -54,12 +55,14 @@ builder.AddProject<Projects.OrderProcessor>("order-processor")
     .WithReference(orderDb)
     .WaitFor(orderingApi); // wait for the orderingApi to be ready because that contains the EF migrations
 
-builder.AddProject<Projects.PaymentProcessor>("payment-processor")
+var paymentProcessor = builder.AddProject<Projects.PaymentProcessor>("payment-processor")
     .WithReference(rabbitMq).WaitFor(rabbitMq);
 
 builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
     .WithReference(temporalServer).WaitFor(temporalServer)
     .WithReference(orderingApi).WaitFor(orderingApi)
+    .WithReference(catalogApi).WaitFor(catalogApi)
+    .WithReference(paymentProcessor).WaitFor(paymentProcessor)
     .WithEnvironment("Identity__Url", identityEndpoint); 
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")

@@ -17,6 +17,7 @@ public class OrderBuilder
     public OrderBuilder(Address address)
     {
         order = new Order(
+            "orderyGuid",
             "userId",
             "fakeName",
             address,

@@ -19,7 +19,7 @@ public class SetStockConfirmedOrderStatusCommandHandler : IRequestHandler<SetSto
     public async Task<bool> Handle(SetStockConfirmedOrderStatusCommand command, CancellationToken cancellationToken)
     {
         // Simulate a work time for confirming the stock
-        await Task.Delay(10000, cancellationToken);
+        await Task.Delay(5000, cancellationToken);
 
         var orderToUpdate = await _orderRepository.GetAsync(command.OrderNumber);
         if (orderToUpdate == null)
@@ -44,8 +44,8 @@ public class SetStockConfirmedOrderStatusIdentifiedCommandHandler : IdentifiedCo
     {
     }
 
-    protected override bool CreateResultForDuplicateRequest()
+    protected override Task<bool> CreateResultForDuplicateRequest(SetStockConfirmedOrderStatusCommand _)
     {
-        return true; // Ignore duplicate requests for processing order.
+        return Task.FromResult(true); // Ignore duplicate requests for processing order.
     }
 }

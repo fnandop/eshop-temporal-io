@@ -536,6 +536,50 @@
         }
       }
     },
+    "/api/catalog/check-stock": {
+      "post": {
+        "tags": [
+          "Catalog"
+        ],
+        "summary": "Check Stock",
+        "description": "Check Stock in the catalog",
+        "operationId": "CheckStock",
+        "parameters": [
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.0"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckStockRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckStockResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/catalog/items/by/{name}": {
       "get": {
         "tags": [
@@ -1026,6 +1070,101 @@
           },
           "type": {
             "type": "string"
+          }
+        }
+      },
+      "CheckStockRequest": {
+        "required": [
+          "orderId",
+          "orderStockItems"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "orderStockItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderStockItem"
+            }
+          }
+        }
+      },
+      "CheckStockResult": {
+        "required": [
+          "orderId",
+          "stockConfirmed",
+          "orderStockItems"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "stockConfirmed": {
+            "type": "boolean"
+          },
+          "orderStockItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfirmedOrderStockItem"
+            }
+          }
+        }
+      },
+      "ConfirmedOrderStockItem": {
+        "required": [
+          "productId",
+          "hasStock"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "hasStock": {
+            "type": "boolean"
+          }
+        }
+      },
+      "OrderStockItem": {
+        "required": [
+          "productId",
+          "units"
+        ],
+        "type": "object",
+        "properties": {
+          "productId": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "units": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
           }
         }
       },

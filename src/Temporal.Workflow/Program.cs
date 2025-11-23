@@ -42,14 +42,40 @@ builder.Services.AddClientCredentialsTokenManagement()
 //// Refit client that uses Aspire service discovery
 builder.Services
     .AddRefitClient<IOrderService>()
-
     .ConfigureHttpClient(c =>
     {
         // Logical service name. Aspire will resolve this via service discovery.
         // `https+http` means "prefer https, fall back to http".
         c.BaseAddress = new Uri("https+http://ordering-api");
-    }).AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse("temporalworkflow.client"));
+    }).
+    AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse("temporalworkflow.client"));
 ;
+
+
+
+//// Refit client that uses Aspire service discovery
+builder.Services
+    .AddRefitClient<ICatalogService>()
+    .ConfigureHttpClient(c =>
+    {
+        // Logical service name. Aspire will resolve this via service discovery.
+        // `https+http` means "prefer https, fall back to http".
+        c.BaseAddress = new Uri("http://catalog-api");
+    }).
+    AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse("temporalworkflow.client"));
+;
+
+builder.Services
+    .AddRefitClient<IPaymentsService>()
+    .ConfigureHttpClient(c =>
+    {
+        // Logical service name. Aspire will resolve this via service discovery.
+        // `https+http` means "prefer https, fall back to http".
+        c.BaseAddress = new Uri("http://payment-processor");
+    }).
+    AddClientCredentialsTokenHandler(ClientCredentialsClientName.Parse("temporalworkflow.client"));
+;
+
 
 // Temporal worker
 builder.Services

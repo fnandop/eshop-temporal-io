@@ -5,6 +5,10 @@ namespace eShop.Ordering.Domain.AggregatesModel.OrderAggregate;
 public class Order
     : Entity, IAggregateRoot
 {
+
+    [Required]
+    public string OrderyGuid { get; private set; }
+
     public DateTime OrderDate { get; private set; }
 
     // Address is a Value Object pattern example persisted as EF Core 2.0 owned entity
@@ -49,9 +53,10 @@ public class Order
         _isDraft = false;
     }
 
-    public Order(string userId, string userName, Address address, int cardTypeId, string cardNumber, string cardSecurityNumber,
+    public Order(string orderyGuid,string userId, string userName, Address address, int cardTypeId, string cardNumber, string cardSecurityNumber,
             string cardHolderName, DateTime cardExpiration, int? buyerId = null, int? paymentMethodId = null) : this()
     {
+        OrderyGuid = orderyGuid;
         BuyerId = buyerId;
         PaymentId = paymentMethodId;
         OrderStatus = OrderStatus.Submitted;

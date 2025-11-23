@@ -10,4 +10,5 @@ public interface IOrderRepository : IRepository<Order>
     void Update(Order order);
 
     Task<Order> GetAsync(int orderId);
+    Task<Order> GetAsyncByOrderGuid(string orderyGuid);
 }

@@ -14,7 +14,7 @@ using eShop.Ordering.API.Extensions;
 
 [DataContract]
 public class CreateOrderCommand
-    : IRequest<bool>
+    : IRequest<int>
 {
     [DataMember]
     private readonly List<OrderItemDTO> _orderItems;
@@ -58,15 +58,18 @@ public class CreateOrderCommand
     [DataMember]
     public IEnumerable<OrderItemDTO> OrderItems => _orderItems;
 
+    public string OrderyGuid { get; private set; }
+
     public CreateOrderCommand()
     {
         _orderItems = new List<OrderItemDTO>();
     }
 
-    public CreateOrderCommand(List<BasketItem> basketItems, string userId, string userName, string city, string street, string state, string country, string zipcode,
+    public CreateOrderCommand(string orderyGuid ,List<BasketItem> basketItems, string userId, string userName, string city, string street, string state, string country, string zipcode,
         string cardNumber, string cardHolderName, DateTime cardExpiration,
         string cardSecurityNumber, int cardTypeId)
     {
+        OrderyGuid = orderyGuid;
         _orderItems = basketItems.ToOrderItemsDTO().ToList();
         UserId = userId;
         UserName = userName;

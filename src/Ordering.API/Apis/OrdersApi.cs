@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.Logging;
 using Temporalio.Client;
 using CardType = eShop.Ordering.API.Application.Queries.CardType;
 using Order = eShop.Ordering.API.Application.Queries.Order;
@@ -15,8 +16,13 @@ public static class OrdersApi
         api.MapGet("/", GetOrdersByUserAsync);
         api.MapGet("/cardtypes", GetCardTypesAsync);
         api.MapPost("/draft", CreateOrderDraftAsync);
-        api.MapPost("/create", CreateOrderAsync);
         api.MapPost("/", SubmitOrder);
+        api.MapPost("/create", CreateOrderAsync);
+        api.MapPatch("{orderId:int}/awaiting-validation", SetAwaitingValidation);
+        api.MapPatch("{orderId:int}/confirm-stock", ConfirmStock);
+        api.MapPatch("{orderId:int}/stock-regected", SetStockRejected);
+        api.MapPatch("{orderId:int}/paid", SetOderPaid);
+        api.MapPatch("{orderId:int}/cancel", CancelOrder);
 
         return api;
     }
@@ -117,7 +123,7 @@ public static class OrdersApi
         return await services.Mediator.Send(command);
     }
 
-    public static async Task<Results<Ok, BadRequest<string>>> CreateOrderAsync(
+    public static async Task<Results<Ok<int>, BadRequest<string>>> CreateOrderAsync(
         [FromHeader(Name = "x-requestid")] Guid requestId,
         CreateOrderRequest request,
         [AsParameters] OrderServices services)
@@ -140,12 +146,12 @@ public static class OrdersApi
         using (services.Logger.BeginScope(new List<KeyValuePair<string, object>> { new("IdentifiedCommandId", requestId) }))
         {
             var maskedCCNumber = request.CardNumber.Substring(request.CardNumber.Length - 4).PadLeft(request.CardNumber.Length, 'X');
-            var createOrderCommand = new CreateOrderCommand(request.Items, request.UserId, request.UserName, request.City, request.Street,
+            var createOrderCommand = new CreateOrderCommand(requestId.ToString().ToLower(), request.Items, request.UserId, request.UserName, request.City, request.Street,
                 request.State, request.Country, request.ZipCode,
                 maskedCCNumber, request.CardHolderName, request.CardExpiration,
                 request.CardSecurityNumber, request.CardTypeId);
 
-            var requestCreateOrder = new IdentifiedCommand<CreateOrderCommand, bool>(createOrderCommand, requestId);
+            var requestCreateOrder = new IdentifiedCommand<CreateOrderCommand, int>(createOrderCommand, requestId);
 
             services.Logger.LogInformation(
                 "Sending command: {CommandName} - {IdProperty}: {CommandId} ({@Command})",
@@ -154,20 +160,37 @@ public static class OrdersApi
                 requestCreateOrder.Id,
                 requestCreateOrder);
 
-            var result = await services.Mediator.Send(requestCreateOrder);
+            var orderId = await services.Mediator.Send(requestCreateOrder);
 
-            if (result)
-            {
-                services.Logger.LogInformation("CreateOrderCommand succeeded - RequestId: {RequestId}", requestId);
-            }
-            else
-            {
-                services.Logger.LogWarning("CreateOrderCommand failed - RequestId: {RequestId}", requestId);
-            }
+            //if (result)
+            //{
+            //    services.Logger.LogInformation("CreateOrderCommand succeeded - RequestId: {RequestId}", requestId);
+            //}
+            //else
+            //{
+            //    services.Logger.LogWarning("CreateOrderCommand failed - RequestId: {RequestId}", requestId);
+            //}
 
-            return TypedResults.Ok();
+            return TypedResults.Ok(orderId);
         }
     }
+
+    private static async Task SetAwaitingValidation([FromRoute] int orderId, [AsParameters] OrderServices services)
+        => await services.Mediator.Send(new SetAwaitingValidationOrderStatusCommand(orderId));
+
+    private static async Task ConfirmStock([FromRoute] int orderId, [AsParameters] OrderServices services)
+        => await services.Mediator.Send(new SetStockConfirmedOrderStatusCommand(orderId));
+
+    public record OrderStockItem(int ProductId, bool HasStock);
+    private static async Task SetStockRejected([FromRoute] int orderId, List<OrderStockItem> orderStockItems, [AsParameters] OrderServices services)
+         => await services.Mediator.Send(new SetStockRejectedOrderStatusCommand(OrderNumber: orderId,
+                                                                                 OrderStockItems: [.. orderStockItems.FindAll(c => !c.HasStock).Select(c => c.ProductId)]));
+
+    private static async Task SetOderPaid([FromRoute] int orderId, [AsParameters] OrderServices services)
+        => await services.Mediator.Send(new SetPaidOrderStatusCommand(orderId));
+  private static async Task CancelOrder([FromRoute] int orderId, [AsParameters] OrderServices services)
+        => await services.Mediator.Send(new CancelOrderCommand(orderId));
+
 
 
     public static async Task<Results<Ok, BadRequest<string>>> SubmitOrder(
@@ -175,7 +198,7 @@ public static class OrdersApi
       CreateOrderRequest request,
       [AsParameters] OrderServices services)
     {
-        var workflowId = requestId.ToString();
+        var workflowId = request.OrderyGuid = requestId.ToString();
         await services.TemporalClient.StartWorkflowAsync("EShopWorkflow", [request], new WorkflowOptions(workflowId, "eshop-task-queue"));
         return TypedResults.Ok();
     }
@@ -195,4 +218,7 @@ public record CreateOrderRequest(
     string CardSecurityNumber,
     int CardTypeId,
     string Buyer,
-    List<BasketItem> Items);
+    List<BasketItem> Items)
+{
+    public string OrderyGuid { get; set; }
+}

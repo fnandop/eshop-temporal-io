@@ -1,8 +1,13 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Reflection.Metadata.Ecma335;
+using eShop.Catalog.API.Infrastructure;
+using eShop.Catalog.API.IntegrationEvents;
+using eShop.Catalog.API.IntegrationEvents.Events;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.Logging;
 using Pgvector.EntityFrameworkCore;
 
 namespace eShop.Catalog.API;
@@ -56,7 +61,7 @@ public static class CatalogApi
             .WithDescription("Search the catalog for items related to the specified text")
             .WithTags("Search");
 
-                // Routes for resolving catalog items using AI.
+        // Routes for resolving catalog items using AI.
         v2.MapGet("/items/withsemanticrelevance", GetItemsBySemanticRelevance)
             .WithName("GetRelevantItems-V2")
             .WithSummary("Search catalog for relevant items")
@@ -76,14 +81,14 @@ public static class CatalogApi
             .WithTags("Brands");
         api.MapGet("/catalogtypes",
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-            async (CatalogContext context) => await context.CatalogTypes.OrderBy(x => x.Type).ToListAsync())
+        async (CatalogContext context) => await context.CatalogTypes.OrderBy(x => x.Type).ToListAsync())
             .WithName("ListItemTypes")
             .WithSummary("List catalog item types")
             .WithDescription("Get a list of the types of catalog items")
             .WithTags("Types");
         api.MapGet("/catalogbrands",
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-            async (CatalogContext context) => await context.CatalogBrands.OrderBy(x => x.Brand).ToListAsync())
+        async (CatalogContext context) => await context.CatalogBrands.OrderBy(x => x.Brand).ToListAsync())
             .WithName("ListItemBrands")
             .WithSummary("List catalog item brands")
             .WithDescription("Get a list of the brands of catalog items")
@@ -109,7 +114,50 @@ public static class CatalogApi
             .WithSummary("Delete catalog item")
             .WithDescription("Delete the specified catalog item");
 
+
+        // Routes for eShop Saga.
+
+        api.MapPost("/check-stock", CheckStock)
+           .WithName("CheckStock")
+           .WithSummary("Check Stock")
+           .WithDescription("Check Stock in the catalog");
+
+
+
         return app;
+    }
+
+    public record CheckStockRequest(int OrderId, IEnumerable<OrderStockItem> OrderStockItems);
+    public record OrderStockItem(int ProductId, int Units);
+
+    public record CheckStockResult(int OrderId, bool stockConfirmed, List<ConfirmedOrderStockItem> OrderStockItems);
+    public record ConfirmedOrderStockItem(int ProductId, bool HasStock);
+
+    public static async Task<Ok<CheckStockResult>> CheckStock(
+      [AsParameters] CatalogServices services,
+      CheckStockRequest checkStockRequest)
+    {
+
+        //ogger.LogInformation("Handling integration event: {IntegrationEventId} - ({@IntegrationEvent})", @event.Id, @event);
+
+        var confirmedOrderStockItems = new List<ConfirmedOrderStockItem>();
+
+
+        foreach (var orderStockItem in checkStockRequest.OrderStockItems)
+        {
+            var catalogItem = services.Context.CatalogItems.Find(orderStockItem.ProductId);
+            if (catalogItem is not null)
+            {
+                var hasStock = catalogItem.AvailableStock >= orderStockItem.Units;
+                var confirmedOrderStockItem = new ConfirmedOrderStockItem(catalogItem.Id, hasStock);
+
+                confirmedOrderStockItems.Add(confirmedOrderStockItem);
+            }
+        }
+
+        return TypedResults.Ok(new CheckStockResult(checkStockRequest.OrderId, !confirmedOrderStockItems.Any(c => !c.HasStock), confirmedOrderStockItems));
+
+
     }
 
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
@@ -175,7 +223,8 @@ public static class CatalogApi
     {
         if (id <= 0)
         {
-            return TypedResults.BadRequest<ProblemDetails>(new (){
+            return TypedResults.BadRequest<ProblemDetails>(new()
+            {
                 Detail = "Id is not valid"
             });
         }
@@ -202,7 +251,7 @@ public static class CatalogApi
     [ProducesResponseType<byte[]>(StatusCodes.Status200OK, "application/octet-stream",
         [ "image/png", "image/gif", "image/jpeg", "image/bmp", "image/tiff",
           "image/wmf", "image/jp2", "image/svg+xml", "image/webp" ])]
-    public static async Task<Results<PhysicalFileHttpResult,NotFound>> GetItemPictureById(
+    public static async Task<Results<PhysicalFileHttpResult, NotFound>> GetItemPictureById(
         CatalogContext context,
         IWebHostEnvironment environment,
         [Description("The catalog item id")] int id)
@@ -314,7 +363,8 @@ public static class CatalogApi
     {
         if (productToUpdate?.Id == null)
         {
-            return TypedResults.BadRequest<ProblemDetails>(new (){
+            return TypedResults.BadRequest<ProblemDetails>(new()
+            {
                 Detail = "Item id must be provided in the request body."
             });
         }
@@ -331,7 +381,8 @@ public static class CatalogApi
 
         if (catalogItem == null)
         {
-            return TypedResults.NotFound<ProblemDetails>(new (){
+            return TypedResults.NotFound<ProblemDetails>(new()
+            {
                 Detail = $"Item with id {id} not found."
             });
         }
