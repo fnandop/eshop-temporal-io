@@ -7,7 +7,7 @@ namespace Temporal.Workflow;
 public interface IPaymentsService
 {
     [Post("/api/payment/confirm?api-version=1.0")]
-    Task ConfirmPaymentAsync([Body] PaymentRequest paymentRequest);
+    Task InitiatePaymentAsync([Body] PaymentRequest paymentRequest);
 }
 
 public class PaymentRequest

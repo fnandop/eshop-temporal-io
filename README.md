@@ -1,142 +1,125 @@
-# eShop Reference Application - "AdventureWorks"
+# eShopOnContainers + Temporal.io Workflows
 
-A reference .NET application implementing an e-commerce website using a services-based architecture using [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/).
+This repository is an experiment in reimplementing the classic eShopOnContainers order saga using [Temporal.io](https://temporal.io/) workflows and activities.
 
-![eShop Reference Application architecture diagram](img/eshop_architecture.png)
+It starts from the official [.NET Aspire–based eShop reference app](https://github.com/dotnet/eShop) and adds:
 
-![eShop homepage screenshot](img/eshop_homepage.png)
+- A **Temporal dev server** hosted via a custom Aspire hosting integration.
+- A **durable order saga** implemented as a Temporal workflow in C#.
+- Activities that call the existing **Ordering**, **Catalog**, and **Payment** services.
 
-## Getting Started
+The goal is to compare a traditional event-choreographed saga with a centrally orchestrated, durable workflow. 
 
-This version of eShop is based on .NET 9. 
 
-Previous eShop versions:
-* [.NET 8](https://github.com/dotnet/eShop/tree/release/8.0)
+## Motivation
 
-### Prerequisites
+After watching Temporal’s keynote on *“The way forward for event-driven architectures”*, the idea was to see how the eShopOnContainers saga would look if implemented with Temporal instead of pure event choreography. :contentReference[oaicite:1]{index=1}
 
-- Clone the eShop repository: https://github.com/dotnet/eshop
-- [Install & start Docker Desktop](https://docs.docker.com/engine/install/)
+The original eShop saga is already a reference for event-driven microservices; this fork keeps that domain model but replaces the saga implementation with a Temporal workflow.
 
-#### Windows with Visual Studio
-- Install [Visual Studio 2022 version 17.10 or newer](https://visualstudio.microsoft.com/vs/).
-  - Select the following workloads:
-    - `ASP.NET and web development` workload.
-    - `.NET Aspire SDK` component in `Individual components`.
-    - Optional: `.NET Multi-platform App UI development` to run client apps
 
-Or
+## Original eShop saga (baseline)
 
-- Run the following commands in a Powershell & Terminal running as `Administrator` to automatically configure your environment with the required tools to build and run this application. (Note: A restart is required and included in the script below.)
 
-```powershell
-install-Module -Name Microsoft.WinGet.Configuration -AllowPrerelease -AcceptLicense -Force
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-get-WinGetConfiguration -file .\.configurations\vside.dsc.yaml | Invoke-WinGetConfiguration -AcceptConfigurationAgreements
+![Original eShop saga](img/EShopSaga.drawio.svg)
+In the reference application, an order moves through its lifecycle via domain and integration events published between services:
+
+1. **Checkout**  
+   - ClientApp calls the **Create Order** endpoint (ClientApp → Ordering: `POST /api/Orders/`).  
+   - Ordering creates the order in the Ordering DB and raises `OrderStartedDomainEvent`.
+
+2. **Grace period & validation**  
+   - The OrderProcessor polls the Ordering DB to find orders whose grace period has elapsed. After the grace period, a `GracePeriodConfirmedIntegrationEvent` is raised.  
+   - Ordering handles this event, sets the status to *AwaitingValidation*, and raises `OrderStatusChangedToAwaitingValidationIntegrationEvent`.
+
+3. **Stock validation (Catalog)**  
+   - Catalog handles the `OrderStatusChangedToAwaitingValidationIntegrationEvent`, verifies stock, and publishes either `OrderStockConfirmedIntegrationEvent` or `OrderStockRejectedIntegrationEvent`.
+
+4. **Payment**  
+   - If stock is confirmed, Ordering notifies the Payment service with `OrderStatusChangedToStockConfirmedIntegrationEvent`.  
+   - Payment responds with either `OrderPaymentSucceededIntegrationEvent` or `OrderPaymentFailedIntegrationEvent`.
+
+5. **Completion / compensation**  
+   - On success: the order is marked as *Paid* and stock is decremented.  
+   - On failure (stock or payment): the order is set to *Cancelled*.
+
+We can extend the saga and make it more complex for example implementing some product reservation logic in the Catalog service, and then compensating that reservation if the payment fails,
+or implmenent the ship part after the payment is successful.But let keep it simple.
+
+All of this is modeled as a **choreographed saga**: there is no central coordinator; each service reacts to events and emits new events.
+
+
+
+## Temporal-based saga
+
+![Temporal eShop saga](img/EShopSagaTemporal.drawio.svg)
+
+In this fork, that same business process is expressed as a **Temporal workflow**  [`EShopWorkflow.cs`](./src/Temporal.Workflow/EShopWorkflow.cs) that becomes the single source of truth for the order lifecycle.
+
+Conceptually, the workflow does:
+
+1. **Start & create order**
+   - Create the order through the Ordering service and store the resulting order ID inside the workflow.
+
+2. **Grace period & awaiting validation**
+   - Sleep for the configured grace period (Temporal timer).
+   - Update the order state to *AwaitingValidation* via an Ordering activity.
+
+3. **Stock check**
+   - Call a Catalog activity to validate stock for all order items.
+   - If everything is available, record “stock confirmed”.
+   - If any item is missing, record “stock rejected” with item-level details and mark the order as cancelled.
+
+4. **Trigger payment**
+   - If stock is confirmed, invoke a Payment activity to start processing the payment.
+
+5. **Wait for payment outcome (signals)**
+   - The workflow waits for external **signals** indicating payment success or failure.
+   - On success: mark the order as *Paid* and optionally trigger a Catalog activity to decrement stock.
+   - On failure: mark the order as *Cancelled*.
+
+6. **Finalize**
+   - The workflow completes, leaving behind a full execution history you can inspect in the Temporal UI.
+
+All external calls (Ordering, Catalog, Payment) are implemented as **Temporal activities** with shared retry and logging configuration, giving you durability and consistent error handling across the saga. 
+
+![Orders List](img/OrdersList.png)
+![Orders List](img/TemporalWorkfloHappyPath.png)
+![Orders List](img/TemporalWorkfloNoStock.png)
+![Orders List](img/TemporalWorkfloNoMoney.png)
+
+
+## Temporal server integration (Aspire hosting)
+
+![Aspire Tempora lHost](img/AspireTemporalHost.png)
+
+To keep everything self-contained, the Temporal dev server runs as part of the Aspire host:
+
+- A **custom Aspire hosting integration**  [`TemporalResourceBuilderExtensions.cs`](./src/Temporal.Hosting/TemporalResourceBuilderExtensions.cs)  starts a Temporal dev server using the [`temporalio/temporal`](https://hub.docker.com/r/temporalio/temporal) image via the Temporal CLI’s `server start-dev` mode (see the [Temporal CLI repository](https://github.com/temporalio/cli)).
+
+By default, `temporal server start-dev` uses an in-memory database, so stopping the server erases all your Workflows and Task Queues. To persist data between runs, specify a database file with the `--db-filename` option, for example:
+
+```bash
+temporal server start-dev --db-filename your_temporal.db
 ```
 
-Or
+The Docker command that this host executes is:
 
-- From Dev Home go to `Machine Configuration -> Clone repositories`. Enter the URL for this repository. In the confirmation screen look for the section `Configuration File Detected` and click `Run File`.
-
-#### Mac, Linux, & Windows without Visual Studio
-- Install the latest [.NET 9 SDK](https://dot.net/download?cid=eshop)
-
-Or
-
-- Run the following commands in a Powershell & Terminal running as `Administrator` to automatically configuration your environment with the required tools to build and run this application. (Note: A restart is required after running the script below.)
-
-##### Install Visual Studio Code and related extensions
-```powershell
-install-Module -Name Microsoft.WinGet.Configuration -AllowPrerelease -AcceptLicense  -Force
-$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-get-WinGetConfiguration -file .\.configurations\vscode.dsc.yaml | Invoke-WinGetConfiguration -AcceptConfigurationAgreements
+```bash
+docker run docker.io/temporalio/temporal:latest server start-dev   --ip 0.0.0.0   --db-filename /var/opt/temporal/temporal.db
 ```
 
-> Note: These commands may require `sudo`
+Initially, a Docker volume was mapped to `/var/opt/temporal/`, but this resulted in the following error:
 
-- Optional: Install [Visual Studio Code with C# Dev Kit](https://code.visualstudio.com/docs/csharp/get-started)
-- Optional: Install [.NET MAUI Workload](https://learn.microsoft.com/dotnet/maui/get-started/installation?tabs=visual-studio-code)
+> unable to open database file: out of memory (14)
 
-> Note: When running on Mac with Apple Silicon (M series processor), Rosetta 2 for grpc-tools. 
-
-### Running the solution
-
-> [!WARNING]
-> Remember to ensure that Docker is started
-
-* (Windows only) Run the application from Visual Studio:
- - Open the `eShop.Web.slnf` file in Visual Studio
- - Ensure that `eShop.AppHost.csproj` is your startup project
- - Hit Ctrl-F5 to launch Aspire
-
-* Or run the application from your terminal:
-```powershell
-dotnet run --project src/eShop.AppHost/eShop.AppHost.csproj
-```
-then look for lines like this in the console output in order to find the URL to open the Aspire dashboard:
-```sh
-Login to the dashboard at: http://localhost:19888/login?t=uniquelogincodeforyou
-```
-
-> You may need to install ASP.NET Core HTTPS development certificates first, and then close all browser tabs. Learn more at https://aka.ms/aspnet/https-trust-dev-cert
-
-### Azure Open AI
-
-When using Azure OpenAI, inside *eShop.AppHost/appsettings.json*, add the following section:
-
-```json
-  "ConnectionStrings": {
-    "OpenAi": "Endpoint=xxx;Key=xxx;"
-  }
-```
-
-Replace the values with your own. Then, in the eShop.AppHost *Program.cs*, set this value to **true**
+Because of that, the integration uses a bind mount instead:
 
 ```csharp
-bool useOpenAI = false;
+.WithBindMount(source: temporalDbPath, target: "/var/opt/temporal")
 ```
 
-Here's additional guidance on the [.NET Aspire OpenAI component](https://learn.microsoft.com/dotnet/aspire/azureai/azureai-openai-component?tabs=dotnet-cli). 
+In the future, we may add an Aspire host for the full [`temporalio/server`](https://hub.docker.com/r/temporalio/server) image (not `start-dev` mode), using the PostgreSQL database that is already hosted in the solution.
 
-### Use Azure Developer CLI
+For more details about Aspire hosting integrations, see the [Aspire documentation](https://learn.microsoft.com/en-us/dotnet/aspire/extensibility/custom-hosting-integration)
 
-You can use the [Azure Developer CLI](https://aka.ms/azd) to run this project on Azure with only a few commands. Follow the next instructions:
-
-- Install the latest or update to the latest [Azure Developer CLI (azd)](https://aka.ms/azure-dev/install).
-- Log in `azd` (if you haven't done it before) to your Azure account:
-```sh
-azd auth login
-```
-- Initialize `azd` from the root of the repo.
-```sh
-azd init
-```
-- During init:
-  - Select `Use code in the current directory`. Azd will automatically detect the .NET Aspire project.
-  - Confirm `.NET (Aspire)` and continue.
-  - Select which services to expose to the Internet (exposing `webapp` is enough to test the sample).
-  - Finalize the initialization by giving a name to your environment.
-
-- Create Azure resources and deploy the sample by running:
-```sh
-azd up
-```
-Notes:
-  - The operation takes a few minutes the first time it is ever run for an environment.
-  - At the end of the process, `azd` will display the `url` for the webapp. Follow that link to test the sample.
-  - You can run `azd up` after saving changes to the sample to re-deploy and update the sample.
-  - Report any issues to [azure-dev](https://github.com/Azure/azure-dev/issues) repo.
-  - [FAQ and troubleshoot](https://learn.microsoft.com/azure/developer/azure-developer-cli/troubleshoot?tabs=Browser) for azd.
-
-## Contributing
-
-For more information on contributing to this repo, read [the contribution documentation](./CONTRIBUTING.md) and [the Code of Conduct](CODE-OF-CONDUCT.md).
-
-### Sample data
-
-The sample catalog data is defined in [catalog.json](https://github.com/dotnet/eShop/blob/main/src/Catalog.API/Setup/catalog.json). Those product names, descriptions, and brand names are fictional and were generated using [GPT-35-Turbo](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/chatgpt), and the corresponding [product images](https://github.com/dotnet/eShop/tree/main/src/Catalog.API/Pics) were generated using [DALL·E 3](https://openai.com/dall-e-3).
-
-## eShop on Azure
-
-For a version of this app configured for deployment on Azure, please view [the eShop on Azure](https://github.com/Azure-Samples/eShopOnAzure) repo.

@@ -1,20 +1,16 @@
-﻿using System.Diagnostics;
-using Microsoft.Extensions.Logging;
-using Temporalio.Activities;
-using Temporalio.Common;
+﻿using Temporalio.Common;
 using Temporalio.Workflows;
-using static Temporal.Workflow.ICatalogService;
 
 
 namespace Temporal.Workflow
 {
     [Workflow]
-    public class EShopWorkflow
+    public partial class EShopWorkflow
     {
 
         int _orderId = default;
         private PaymentStatus _paymentStatus = PaymentStatus.Unknown;
-        
+
 
         [WorkflowRun]
         public async Task RunAsync(OrderRequest orderRequest)
@@ -48,16 +44,18 @@ namespace Temporal.Workflow
 
             if (checkStockResult.StockConfirmed)
                 await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
-               (EShopActivities act) => act.ConfirmThatHasStock(_orderId),
-               new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+                    (EShopActivities act) => act.ConfirmThatHasStock(_orderId),
+                    new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
             else
+            {
                 await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
-             (EShopActivities act) => act.ConfirmThatHasNoStock(_orderId, checkStockResult.OrderStockItems.Select(i => new IOrderService.ConfirmedOrderStockItem(i.ProductId, i.HasStock))),
-             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
-
+                    (EShopActivities act) => act.ConfirmThatHasNoStock(_orderId, checkStockResult.OrderStockItems.Select(i => new IOrderService.ConfirmedOrderStockItem(i.ProductId, i.HasStock))),
+                    new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
+                return;
+            }
 
             await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
-             (EShopActivities act) => act.ConfirmPaymentAsync(_orderId, orderRequest.OrderyGuid),
+             (EShopActivities act) => act.InitiatePaymentAsync(_orderId, orderRequest.OrderyGuid),
              new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
 
             // Wait for purchase
@@ -78,15 +76,6 @@ namespace Temporal.Workflow
                        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromMinutes(5), RetryPolicy = retryPolicy });
 
             }
-
-
-        }
-
-        enum PaymentStatus
-        {
-            Unknown,
-            Succeeded,
-            Failed
         }
 
         [WorkflowSignal("NotifyOrderPaymentSucceeded")]
@@ -94,94 +83,5 @@ namespace Temporal.Workflow
 
         [WorkflowSignal("NotifyOrderPaymentFailed")]
         public async Task NotifyOrderPaymentFailedAsync() => _paymentStatus = PaymentStatus.Failed;
-
-
-
     }
-
-
-
-    public class EShopActivities
-    {
-        private readonly IPaymentsService _paymentsService;
-
-        public IOrderService _orderService { get; }
-        public ICatalogService _catalogService { get; }
-
-        public EShopActivities(IOrderService orderService, ICatalogService catalogService, IPaymentsService paymentsService)
-        {
-            _orderService = orderService;
-            _catalogService = catalogService;
-            _paymentsService = paymentsService;
-        }
-
-        [Activity]
-        public async Task<int> CreateOrder(OrderRequest orderRequest)
-        {
-            var requestId = Guid.NewGuid().ToString();
-            int orderId = await _orderService.CreateOrderAsync(orderRequest, requestId);
-            ActivityExecutionContext.Current.Logger.LogInformation("CreateOrder {requestId}", requestId);
-            return orderId;
-        }
-
-        public record SetAwaitingValidationRequest(int OrderId);
-
-        [Activity]
-        public async Task SetAwaitingValidation(int orderId)
-        {
-            await _orderService.SetAwaitingValidation(orderId);
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm if has Stock {OrderId}", orderId);
-        }
-
-
-        [Activity]
-        public async Task<CheckStockResult> CheckStock(int orderId, IEnumerable<BasketItem> basketItems)
-        {
-            var result = await _catalogService.CheckStock(new CheckStockRequest(orderId, basketItems.Select(i => new OrderStockItem(i.ProductId, i.Quantity))));
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm if has Stock {OrderId}", orderId);
-            return result;
-        }
-
-
-        [Activity]
-        public async Task ConfirmThatHasStock(int orderId)
-        {
-            await _orderService.ConfirmStockAsync(orderId);
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has Stock {OrderId}", orderId);
-        }
-
-        [Activity]
-        public async Task ConfirmThatHasNoStock(int orderId, IEnumerable<IOrderService.ConfirmedOrderStockItem> orderStockItems)
-        {
-            await _orderService.ConfirmStockRejectedAsync(orderId, orderStockItems);
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
-        }
-        [Activity]
-        public async Task SetPaidOrderStatus(int orderId)
-        {
-            await _orderService.SetPaidOrderStatusAsync(orderId);
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
-        }
-
-        [Activity]
-        public async Task CancelOrder(int orderId)
-        {
-            await _orderService.CancelOrderAsync(orderId);
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
-        }
-
-        [Activity]
-        public async Task ConfirmPaymentAsync(int orderId, string orderyGuid)
-        {
-            await _paymentsService.ConfirmPaymentAsync(new PaymentRequest { OrderId = orderId, OrderyGuid = orderyGuid });
-            ActivityExecutionContext.Current.Logger.LogInformation("Confirm that has not Stock {OrderId}", orderId);
-        }
-
-
-
-    }
-
-
-
-
 }
