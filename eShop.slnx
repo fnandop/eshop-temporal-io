@@ -7,13 +7,14 @@
     <Project Path="src/eShop.ServiceDefaults/eShop.ServiceDefaults.csproj" />
     <Project Path="src/EventBus/EventBus.csproj" />
     <Project Path="src/EventBusRabbitMQ/EventBusRabbitMQ.csproj" />
-    <Project Path="src/HybridApp/HybridApp.csproj" />
+    <Project Path="src/HybridApp/HybridApp.csproj">
+      <Deploy Solution="Debug|*" />
+    </Project>
     <Project Path="src/Identity.API/Identity.API.csproj" />
     <Project Path="src/IntegrationEventLogEF/IntegrationEventLogEF.csproj" />
     <Project Path="src/Ordering.API/Ordering.API.csproj" />
     <Project Path="src/Ordering.Domain/Ordering.Domain.csproj" />
     <Project Path="src/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
-    <Project Path="src/OrderProcessor/OrderProcessor.csproj" />
     <Project Path="src/PaymentProcessor/PaymentProcessor.csproj" />
     <Project Path="src/Temporal.Hosting/Temporal.Hosting.csproj" Id="449c7c35-14c7-4993-b139-6903667c9472" />
     <Project Path="src/Temporal.Workflow/Temporal.Workflow.csproj" Id="f3567eff-8da4-4318-bb50-7087c539f46e" />

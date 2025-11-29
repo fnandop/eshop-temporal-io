@@ -24,7 +24,6 @@
     <ProjectReference Include="..\Catalog.API\Catalog.API.csproj" />
     <ProjectReference Include="..\Identity.API\Identity.API.csproj" />
     <ProjectReference Include="..\Ordering.API\Ordering.API.csproj" />
-    <ProjectReference Include="..\OrderProcessor\OrderProcessor.csproj" />
     <ProjectReference Include="..\PaymentProcessor\PaymentProcessor.csproj" />
     <ProjectReference Include="..\Temporal.Hosting\Temporal.Hosting.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Temporal.Workflow\Temporal.Workflow.csproj" />
