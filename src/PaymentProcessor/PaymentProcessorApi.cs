@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Options;
+﻿using System.Threading;
+using Microsoft.Extensions.Options;
 using Temporalio.Client;
 
 namespace PaymentProcessor
@@ -14,7 +15,7 @@ namespace PaymentProcessor
 
 
 
-            v1.MapPost("confirm", async (
+            v1.MapPost("confirm", async (CancellationToken cancellationToken,
                 ConfirmPaymentRequest @event,
                 ITemporalClient temporalClient,
                 IOptionsMonitor<PaymentOptions> options,
@@ -22,24 +23,13 @@ namespace PaymentProcessor
             {
                 logger.LogInformation("Processing payment confirmation request for OrderId: {OrderId}, OrderGuid: {OrderGuid}", @event.OrderId, @event.OrderyGuid);
 
-                var handle = temporalClient.GetWorkflowHandle(@event.OrderyGuid);
+                // Simulate payment flow
+                //await Task.Delay(5000, cancellationToken);
 
+                var workflowId = $"Payment_Processing_mock{@event.OrderyGuid}";
+                await temporalClient.StartWorkflowAsync((PaymentWorkflowMockDelay wf) => wf.RunAsync(@event.OrderId, @event.OrderyGuid), new WorkflowOptions(workflowId, "eshop-payment-mock-task-queue") );
 
-                if (options.CurrentValue.PaymentSucceeded)
-                {
-                    logger.LogInformation("Payment succeeded for OrderId: {OrderId}, signaling workflow.", @event.OrderId);
-                    await handle.SignalAsync("NotifyOrderPaymentSucceeded", []);
-
-
-                }
-                else
-                {
-                    logger.LogWarning("Payment failed for OrderId: {OrderId}, signaling workflow.", @event.OrderId);
-                    await handle.SignalAsync("NotifyOrderPaymentFailed", []);
-                }
-
-                logger.LogInformation("Payment confirmation request handled successfully for OrderId: {OrderId}.", @event.OrderId);
-                return Results.Ok(new { Message = "Integration event handled successfully." });
+                return Results.Ok(new { Message = "Processing payment confirmation started." });
             }).WithName("ConfirmPayment")
                 .WithSummary("Confirm Payment")
                 .WithDescription("Request payment confirmation")

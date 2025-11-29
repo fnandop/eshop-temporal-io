@@ -47,6 +47,7 @@ var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(orderDb).WaitFor(orderDb)
+    .WithReference(temporalServer).WaitFor(temporalServer)
     .WithHttpHealthCheck("/health")
     .WithEnvironment("Identity__Url", identityEndpoint);
 
@@ -56,7 +57,8 @@ builder.AddProject<Projects.OrderProcessor>("order-processor")
     .WaitFor(orderingApi); // wait for the orderingApi to be ready because that contains the EF migrations
 
 var paymentProcessor = builder.AddProject<Projects.PaymentProcessor>("payment-processor")
-    .WithReference(rabbitMq).WaitFor(rabbitMq);
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
+    .WithReference(temporalServer).WaitFor(temporalServer);
 
 builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
     .WithReference(temporalServer).WaitFor(temporalServer)

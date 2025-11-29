@@ -19,7 +19,7 @@ public class SetStockRejectedOrderStatusCommandHandler : IRequestHandler<SetStoc
     public async Task<bool> Handle(SetStockRejectedOrderStatusCommand command, CancellationToken cancellationToken)
     {
         // Simulate a work time for rejecting the stock
-        await Task.Delay(5000, cancellationToken);
+        await Task.Delay(250, cancellationToken);
 
         var orderToUpdate = await _orderRepository.GetAsync(command.OrderNumber);
         if (orderToUpdate == null)

@@ -1,4 +1,5 @@
 ﻿using PaymentProcessor;
+using Temporalio.Extensions.Hosting;
 
 
 
@@ -13,6 +14,16 @@ var withApiVersioning = builder.Services.AddApiVersioning();
 
 builder.AddDefaultOpenApi(withApiVersioning);
 
+// Temporal worker
+builder.Services
+    .AddHostedTemporalWorker(
+        clientTargetHost: "localhost:7233",
+        clientNamespace: "default",
+        taskQueue: "eshop-payment-mock-task-queue")
+    .AddScopedActivities<PaymentWorkflowMockDelayActivities>()
+    .AddWorkflow<PaymentWorkflowMockDelay>();
+
+
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
@@ -22,7 +33,10 @@ app.UseStatusCodePages();
 app.MapPaymentProcessorEndpoints();
 
 app.UseDefaultOpenApi();
-app.Run();
+
+await app.RunAsync();
+
+
 
 
 
