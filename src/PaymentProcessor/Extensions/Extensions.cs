@@ -7,7 +7,9 @@ public static class Extensions
         // is being invoked from build-time OpenAPI generation
         if (builder.Environment.IsBuild())
             return;
-        builder.Services.AddTemporalClient(clientTargetHost: "localhost:7233");
         builder.Services.AddOptions<PaymentOptions>().BindConfiguration(nameof(PaymentOptions));
+
+        var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
+        builder.Services.AddTemporalClient(clientTargetHost: temporalServerHost);
     }
 }

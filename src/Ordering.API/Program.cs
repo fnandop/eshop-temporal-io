@@ -1,9 +1,10 @@
-﻿var builder = WebApplication.CreateBuilder(args);
+﻿using Microsoft.Extensions.Configuration;
+
+var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.AddApplicationServices();
 builder.Services.AddProblemDetails();
-builder.Services.AddTemporalClient(clientTargetHost: "localhost:7233");
 
 var withApiVersioning = builder.Services.AddApiVersioning();
 

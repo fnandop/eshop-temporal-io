@@ -5,7 +5,7 @@ internal static class Extensions
     public static void AddApplicationServices(this IHostApplicationBuilder builder)
     {
         var services = builder.Services;
-        
+
         // Add the authentication services to DI
         builder.AddDefaultAuthentication();
 
@@ -47,5 +47,9 @@ internal static class Extensions
         services.AddScoped<IBuyerRepository, BuyerRepository>();
         services.AddScoped<IOrderRepository, OrderRepository>();
         services.AddScoped<IRequestManager, RequestManager>();
+
+
+        var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
+        builder.Services.AddTemporalClient(clientTargetHost: temporalServerHost);
     }
 }

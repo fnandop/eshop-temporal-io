@@ -13,7 +13,7 @@ The goal is to compare a traditional event-choreographed saga with a centrally o
 
 ## Motivation
 
-After watching Temporal’s keynote on *“The way forward for event-driven architectures”*, the idea was to see how the eShopOnContainers saga would look if implemented with Temporal instead of pure event choreography. :contentReference[oaicite:1]{index=1}
+After watching Temporal’s keynote on [The way forward for event-driven architectures](https://temporal.io/resources/on-demand/keynote-the-way-forward-for-event-driven-architectures), the idea was to see how the eShopOnContainers saga would look if implemented with Temporal instead of pure event choreography. :contentReference[oaicite:1]{index=1}
 
 The original eShop saga is already a reference for event-driven microservices; this fork keeps that domain model but replaces the saga implementation with a Temporal workflow.
 
@@ -87,6 +87,14 @@ All external calls (Ordering, Catalog, Payment) are implemented as **Temporal ac
 ![Orders List](img/TemporalWorkfloHappyPath.png)
 ![Orders List](img/TemporalWorkfloNoStock.png)
 ![Orders List](img/TemporalWorkfloNoMoney.png)
+
+### The Integration Events
+In this implementation, integration events are no longer the *center of the universe*, because they are no longer used to drive the saga. However, this does not mean they are not used at all. Some of them have been removed, but the ones published by the Order API when the order status changes are still there, because they are used to notify, in particular, the UI components about order status changes.
+
+Since the loss of some events might be tolerable, we could potentially get rid of the Outbox pattern in the ordering service and replace the message broker (RabbitMQ) with something lighter, such as Redis Pub/Sub.
+
+Alternatively if the loss is not tolerable, we could remove the Outbox pattern and move the notifications so that they are sent directly from the workflow activities.
+
 
 
 ## Temporal server integration (Aspire hosting)

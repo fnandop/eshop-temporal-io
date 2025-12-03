@@ -24,7 +24,6 @@ var webhooksDb = postgres.AddDatabase("webhooksdb");
 
 var temporalServer = builder.AddTemporal("temporal-server", 7233, 8233).WithLifetime(ContainerLifetime.Persistent);
 
-
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
 // Services
@@ -55,12 +54,14 @@ var paymentProcessor = builder.AddProject<Projects.PaymentProcessor>("payment-pr
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(temporalServer).WaitFor(temporalServer);
 
+
 builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
-    .WithReference(temporalServer).WaitFor(temporalServer)
     .WithReference(orderingApi).WaitFor(orderingApi)
     .WithReference(catalogApi).WaitFor(catalogApi)
     .WithReference(paymentProcessor).WaitFor(paymentProcessor)
-    .WithEnvironment("Identity__Url", identityEndpoint); 
+    .WithEnvironment("Identity__Url", identityEndpoint)
+    .WithReference(temporalServer).WaitFor(temporalServer);
+
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)

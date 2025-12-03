@@ -78,9 +78,10 @@ builder.Services
 
 
 // Temporal worker
+var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
 builder.Services
     .AddHostedTemporalWorker(
-        clientTargetHost: "localhost:7233",
+        clientTargetHost: temporalServerHost!,
         clientNamespace: "default",
         taskQueue: "eshop-task-queue")
     .AddScopedActivities<EShopActivities>()

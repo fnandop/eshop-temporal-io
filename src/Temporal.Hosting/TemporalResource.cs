@@ -9,9 +9,13 @@ namespace Temporal.Hosting
         internal const string TemporalServerUIEndpointName = "temporal-server-ui";
 
         private EndpointReference? _temporalServerReference;
+        private EndpointReference? _temporalServerUIReference;
 
         public EndpointReference TemporalServerEndpoint =>
-       _temporalServerReference ??= new(this, TemporalServerGRPCEndpointName);
+            _temporalServerReference ??= new(this, TemporalServerGRPCEndpointName);
+
+        public EndpointReference TemporalServerUiEndpoint =>
+            _temporalServerUIReference ??= new(this, TemporalServerUIEndpointName);
 
         public ReferenceExpression ConnectionStringExpression =>
         ReferenceExpression.Create(

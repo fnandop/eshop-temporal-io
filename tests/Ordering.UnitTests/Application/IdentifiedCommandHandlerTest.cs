@@ -16,7 +16,7 @@ public class IdentifiedCommandHandlerTest
         _requestManager = Substitute.For<IRequestManager>();
         _mediator = Substitute.For<IMediator>();
         _loggerMock = Substitute.For<ILogger<IdentifiedCommandHandler<CreateOrderCommand, int>>>();
-        _orderRepository  = Substitute.For<IOrderRepository>(); ;
+        _orderRepository = Substitute.For<IOrderRepository>(); ;
     }
 
     [TestMethod]
@@ -37,7 +37,7 @@ public class IdentifiedCommandHandlerTest
         var result = await handler.Handle(fakeOrderCmd, CancellationToken.None);
 
         // Assert
-        Assert.AreEqual(999,result);
+        Assert.AreEqual(999, result);
         await _mediator.Received().Send(Arg.Any<IRequest<int>>(), default);
     }
 
@@ -54,12 +54,28 @@ public class IdentifiedCommandHandlerTest
         _mediator.Send(Arg.Any<IRequest<int>>(), default)
             .Returns(Task.FromResult(999));
 
+
+        var street = "fakeStreet";
+        var city = "FakeCity";
+        var state = "fakeState";
+        var country = "fakeCountry";
+        var zipcode = "FakeZipCode";
+        var cardTypeId = 5;
+        var cardNumber = "12";
+        var cardSecurityNumber = "123";
+        var cardHolderName = "FakeName";
+        var cardExpiration = DateTime.UtcNow.AddYears(1);
+        var fakeOrder = new Order("b66b20c7-5d40-40c5-b701-982e092bc22f", "1", "fakeName", new Address(street, city, state, country, zipcode), cardTypeId, cardNumber, cardSecurityNumber, cardHolderName, cardExpiration);
+
+        _orderRepository.GetAsyncByOrderGuid(Arg.Any<string>())
+            .Returns(Task.FromResult(fakeOrder));
+
         // Act
         var handler = new CreateOrderIdentifiedCommandHandler(_mediator, _requestManager, _loggerMock, _orderRepository);
         var result = await handler.Handle(fakeOrderCmd, CancellationToken.None);
 
         // Assert
-       await  _mediator.DidNotReceive().Send(Arg.Any<IRequest<int>>(), default);
+        await _mediator.DidNotReceive().Send(Arg.Any<IRequest<int>>(), default);
     }
 
     private CreateOrderCommand FakeOrderRequest(Dictionary<string, object> args = null)
