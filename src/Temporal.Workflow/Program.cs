@@ -78,7 +78,7 @@ builder.Services
 
 
 // Temporal worker
-var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
+var temporalServerHost = builder.Configuration.GetConnectionString("temporal");
 builder.Services
     .AddHostedTemporalWorker(
         clientTargetHost: temporalServerHost!,

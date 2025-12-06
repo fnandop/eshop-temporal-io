@@ -95,39 +95,33 @@ Since the loss of some events might be tolerable, we could potentially get rid o
 
 Alternatively if the loss is not tolerable, we could remove the Outbox pattern and move the notifications so that they are sent directly from the workflow activities.
 
-
-
 ## Temporal server integration (Aspire hosting)
 
-![Aspire Tempora lHost](img/AspireTemporalHost.png)
+![Aspire Temporal Host](img/AspireTemporalHost.png)
 
-To keep everything self-contained, the Temporal dev server runs as part of the Aspire host:
+To keep everything self-contained, the Temporal server runs as part of the Aspire host.
 
-- A **custom Aspire hosting integration**  [`TemporalResourceBuilderExtensions.cs`](./src/Temporal.Hosting/TemporalResourceBuilderExtensions.cs)  starts a Temporal dev server using the [`temporalio/temporal`](https://hub.docker.com/r/temporalio/temporal) image via the Temporal CLI’s `server start-dev` mode (see the [Temporal CLI repository](https://github.com/temporalio/cli)).
-
-By default, `temporal server start-dev` uses an in-memory database, so stopping the server erases all your Workflows and Task Queues. To persist data between runs, specify a database file with the `--db-filename` option, for example:
-
-```bash
-temporal server start-dev --db-filename your_temporal.db
-```
-
-The Docker command that this host executes is:
-
-```bash
-docker run docker.io/temporalio/temporal:latest server start-dev   --ip 0.0.0.0   --db-filename /var/opt/temporal/temporal.db
-```
-
-Initially, a Docker volume was mapped to `/var/opt/temporal/`, but this resulted in the following error:
-
-> unable to open database file: out of memory (14)
-
-Because of that, the integration uses a bind mount instead:
+- A **custom Aspire hosting integration** in  
+  [`TemporalResourceBuilderExtensions.cs`](./src/Temporal.Hosting/TemporalResourceBuilderExtensions.cs)  
+  exposes extension methods to start a Temporal server using the `temporalio/auto-setup` image,  
+  backed by PostgreSQL as the database (the same PostgreSQL instance used by the other resources in the solution).  
+  It also provides extension methods to add the Temporal Admin Tools and the Temporal UI.
 
 ```csharp
-.WithBindMount(source: temporalDbPath, target: "/var/opt/temporal")
+  var temporal = builder.AddTemporal("temporal")
+                        .WithPostgres(postgres)
+                        .WithtTemporalAdminTools()
+                        .WithtTemporalUi();
 ```
 
-In the future, we may add an Aspire host for the full [`temporalio/server`](https://hub.docker.com/r/temporalio/server) image (not `start-dev` mode), using the PostgreSQL database that is already hosted in the solution.
+
+
+- The AddTemporal call returns a [`TemporalResource.cs`](./src/Temporal.Hosting/TemporalResource.cs)  instance that represents the Temporal server resource within the Aspire host.
+
+- These extension methods are essentially a code-based implementation of the Docker Compose setup found here:
+https://github.com/temporalio/docker-compose/blob/main/docker-compose-postgres.yml
+
 
 For more details about Aspire hosting integrations, see the [Aspire documentation](https://learn.microsoft.com/en-us/dotnet/aspire/extensibility/custom-hosting-integration)
+and about migrate from docker compose to Aspire see  [Migrate from Docker Compose to Aspire](https://learn.microsoft.com/en-us/dotnet/aspire/get-started/migrate-from-docker-compose)
 

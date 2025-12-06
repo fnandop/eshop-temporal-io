@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using Aspire.Hosting;
-using eShop.AppHost;
+﻿using eShop.AppHost;
 using Temporal.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
@@ -10,6 +8,7 @@ builder.AddForwardedHeaders();
 var redis = builder.AddRedis("redis");
 var rabbitMq = builder.AddRabbitMQ("eventbus")
     .WithLifetime(ContainerLifetime.Persistent);
+
 var postgres = builder.AddPostgres("postgres")
     .WithImage("ankane/pgvector")
     .WithImageTag("latest")
@@ -22,7 +21,10 @@ var identityDb = postgres.AddDatabase("identitydb");
 var orderDb = postgres.AddDatabase("orderingdb");
 var webhooksDb = postgres.AddDatabase("webhooksdb");
 
-var temporalServer = builder.AddTemporal("temporal-server", 7233, 8233).WithLifetime(ContainerLifetime.Persistent);
+var temporal = builder.AddTemporal("temporal")
+                      .WithPostgres(postgres)
+                      .WithtTemporalAdminTools()
+                      .WithtTemporalUi();
 
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
@@ -46,13 +48,13 @@ var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(orderDb).WaitFor(orderDb)
-    .WithReference(temporalServer).WaitFor(temporalServer)
+    .WithReference(temporal).WaitFor(temporal)
     .WithHttpHealthCheck("/health")
     .WithEnvironment("Identity__Url", identityEndpoint);
 
 var paymentProcessor = builder.AddProject<Projects.PaymentProcessor>("payment-processor")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
-    .WithReference(temporalServer).WaitFor(temporalServer);
+    .WithReference(temporal).WaitFor(temporal);
 
 
 builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
@@ -60,7 +62,7 @@ builder.AddProject<Projects.Temporal_Workflow>("temporal-workflow")
     .WithReference(catalogApi).WaitFor(catalogApi)
     .WithReference(paymentProcessor).WaitFor(paymentProcessor)
     .WithEnvironment("Identity__Url", identityEndpoint)
-    .WithReference(temporalServer).WaitFor(temporalServer);
+    .WithReference(temporal).WaitFor(temporal);
 
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")

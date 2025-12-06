@@ -49,7 +49,7 @@ internal static class Extensions
         services.AddScoped<IRequestManager, RequestManager>();
 
 
-        var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
+        var temporalServerHost = builder.Configuration.GetConnectionString("temporal");
         builder.Services.AddTemporalClient(clientTargetHost: temporalServerHost);
     }
 }

@@ -9,7 +9,7 @@ public static class Extensions
             return;
         builder.Services.AddOptions<PaymentOptions>().BindConfiguration(nameof(PaymentOptions));
 
-        var temporalServerHost = builder.Configuration.GetConnectionString("temporal-server");
+        var temporalServerHost = builder.Configuration.GetConnectionString("temporal");
         builder.Services.AddTemporalClient(clientTargetHost: temporalServerHost);
     }
 }
