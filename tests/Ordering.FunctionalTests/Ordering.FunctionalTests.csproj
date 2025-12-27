@@ -26,6 +26,7 @@
     <ProjectReference Include="..\..\src\Identity.API\Identity.API.csproj" />
     <ProjectReference Include="..\..\src\Ordering.Domain\Ordering.Domain.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Ordering.Infrastructure\Ordering.Infrastructure.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Temporal.Hosting\Temporal.Hosting.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 
 </Project>

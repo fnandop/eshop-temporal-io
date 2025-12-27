@@ -22,7 +22,20 @@ namespace Temporal.Hosting
             $"{TemporalServerEndpoint.Property(EndpointProperty.HostAndPort)}"
         );
 
+        /// <summary>
+        /// Gets the connection string for the Temporal Server
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
+        {
+            if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
+            {
+                return connectionStringAnnotation.Resource.GetConnectionStringAsync(cancellationToken);
+            }
 
+            return ConnectionStringExpression.GetValueAsync(cancellationToken);
+        }
     }
 
 

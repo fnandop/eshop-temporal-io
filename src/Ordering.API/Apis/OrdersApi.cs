@@ -198,6 +198,13 @@ public static class OrdersApi
       CreateOrderRequest request,
       [AsParameters] OrderServices services)
     {
+
+        if (requestId == Guid.Empty)
+        {
+            services.Logger.LogWarning("Invalid IntegrationEvent - RequestId is missing - {@IntegrationEvent}", request);
+            return TypedResults.BadRequest("RequestId is missing.");
+        }
+
         var workflowId = request.OrderyGuid = requestId.ToString();
         await services.TemporalClient.StartWorkflowAsync("EShopWorkflow", [request], new WorkflowOptions(workflowId, "eshop-task-queue"));
         return TypedResults.Ok();

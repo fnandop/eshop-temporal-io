@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Hosting;
+using Temporal.Hosting;
 
 namespace eShop.Ordering.FunctionalTests;
 
@@ -10,8 +11,10 @@ public sealed class OrderingApiFixture : WebApplicationFactory<Program>, IAsyncL
     public IResourceBuilder<PostgresServerResource> Postgres { get; private set; }
     public IResourceBuilder<PostgresServerResource> IdentityDB { get; private set; }
     public IResourceBuilder<ProjectResource> IdentityApi { get; private set; }
+    public IResourceBuilder<TemporalResource> Temporal { get; private set; }
 
     private string _postgresConnectionString;
+    private string _temporalConnectionString;
 
     public OrderingApiFixture()
     {
@@ -20,6 +23,7 @@ public sealed class OrderingApiFixture : WebApplicationFactory<Program>, IAsyncL
         Postgres = appBuilder.AddPostgres("OrderingDB");
         IdentityDB = appBuilder.AddPostgres("IdentityDB");
         IdentityApi = appBuilder.AddProject<Projects.Identity_API>("identity-api").WithReference(IdentityDB);
+       Temporal =   appBuilder.AddTemporalDevServer("temporal");
         _app = appBuilder.Build();
     }
 
@@ -30,6 +34,7 @@ public sealed class OrderingApiFixture : WebApplicationFactory<Program>, IAsyncL
             config.AddInMemoryCollection(new Dictionary<string, string>
             {
                 { $"ConnectionStrings:{Postgres.Resource.Name}", _postgresConnectionString },
+                  { $"ConnectionStrings:temporal", _temporalConnectionString },
                 { "Identity:Url", IdentityApi.GetEndpoint("http").Url }
             });
         });
@@ -58,6 +63,7 @@ public sealed class OrderingApiFixture : WebApplicationFactory<Program>, IAsyncL
     {
         await _app.StartAsync();
         _postgresConnectionString = await Postgres.Resource.GetConnectionStringAsync();
+        _temporalConnectionString = await Temporal.Resource.GetConnectionStringAsync();
     }
 
     private class AutoAuthorizeStartupFilter : IStartupFilter

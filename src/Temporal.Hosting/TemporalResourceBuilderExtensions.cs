@@ -1,5 +1,6 @@
 ﻿using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft;
 
 namespace Temporal.Hosting
 {
@@ -53,7 +54,7 @@ namespace Temporal.Hosting
             var builder = temporal.ApplicationBuilder;
             var temporalAdminToolsVersion = builder.Configuration["TEMPORAL_ADMINTOOLS_VERSION"] ?? "latest";
             // temporal-admin-tools
-            var temporalAdminTools = builder
+            builder
                 .AddContainer("temporal-admin-tools", "temporalio/admin-tools", temporalAdminToolsVersion)
                 .WithContainerName("temporal-admin-tools")
                 .WithReference(temporal)
@@ -68,7 +69,7 @@ namespace Temporal.Hosting
         {
             var builder = temporal.ApplicationBuilder;
             var temporalUiVersion = builder.Configuration["TEMPORAL_UI_VERSION"] ?? "latest";
-            var temporalUi = builder
+            builder
                   .AddContainer("temporal-ui", "temporalio/ui", temporalUiVersion)
                   .WithContainerName("temporal-ui")
                   .WithReference(temporal)
@@ -84,5 +85,31 @@ namespace Temporal.Hosting
 
             return temporal;
         }
+
+        public static IResourceBuilder<TemporalResource> AddTemporalDevServer(this IDistributedApplicationBuilder builder, string name, int? grpcPort = null, int? uiPort = null)
+        {
+
+            var temporalVersion = builder.Configuration["TEMPORAL_VERSION"] ?? "latest";
+            var resource = new TemporalResource(name);
+            // check https://github.com/temporalio/cli
+            return builder.AddResource(resource)
+                          .WithImage("temporalio/temporal")
+                          .WithImageRegistry("docker.io")
+                          .WithImageTag(temporalVersion)
+                           .WithArgs("server", "start-dev", "--ip", "0.0.0.0")
+            .WithEndpoint(
+                name: TemporalResource.TemporalServerGRPCEndpointName,
+                port: grpcPort ?? 7233,
+                targetPort: 7233,
+                scheme: "grpc"
+            ).WithEndpoint(
+                      name: TemporalResource.TemporalServerUIEndpointName,
+                      port: uiPort ?? 8233,
+                      targetPort: 8233,
+                      scheme: "http"
+                  );
+
+        }
+
     }
 }
